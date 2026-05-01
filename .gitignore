@@ -1,0 +1,54 @@
+# 编译输出目录
+build/
+cmake-build-*/
+
+# 可执行文件
+*.exe
+*.out
+*.app
+
+# CMake 生成文件
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+
+# 编译器生成文件
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dylib
+*.dll
+
+# 临时文件
+*~
+*.swp
+*.swo
+*.bak
+*.tmp
+
+# IDE 文件
+.vscode/
+.idea/
+*.sublime-*
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 日志文件
+*.log
+
+# 数据和缓存
+data/
+cache/
+
+# 测试结果
+test_results/
+
+# 备份文件
+*_backup.*
+*_old.*
