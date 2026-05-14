@@ -1,332 +1,109 @@
-# 机械臂视觉抓取系统
+# 机械臂视觉抓取系统 — STM32实战版
 
-一个用C++实现的机械臂视觉抓取模板系统，支持计算机视觉、物体检测、抓取规划和机器人控制。
+基于中国大学生工程实践与创新能力大赛（工训大赛）标准，使用 MV4 H7 Plus 视觉模块 + STM32 + ZX30D 六轴舵机臂的低成本桌面抓取方案。
 
-## 🌟 特性
+## 硬件清单
 
-- **计算机视觉集成**: 使用OpenCV进行图像处理和物体检测
-- **模块化设计**: 相机、检测器、抓取规划器、机器人控制器完全解耦
-- **易于扩展**: 可以轻松替换不同的检测算法和机器人控制接口
-- **模拟环境**: 内置模拟机器人用于测试和开发
-- **调试支持**: 可视化工具帮助调试抓取过程
-- **跨平台**: 支持Windows、Linux和macOS
+| 硬件 | 型号 | 状态 |
+|------|------|------|
+| 六轴机械臂 | ZX30D 舵机 × 6 | 已有 |
+| 主控板 | STM32 (F1/F4) | 已有 |
+| 视觉模块 | MV4 H7 Plus | 已有 |
+| 电源 | 12V/10A 开关电源 | 需购 |
+| 舵机驱动板 | PCA9685 或 servo shield | 需购 |
+| 夹爪 | 舵机控制夹爪 | 需购 |
 
-## 📋 系统要求
+## 接线图
 
-### 必需依赖
-- **C++ 编译器**: GCC 7+ / Clang 5+ / MSVC 2017+
-- **CMake**: 版本 3.10 或更高
-- **OpenCV**: 版本 4.0 或更高
+| STM32 Pin | 功能 | 连接 |
+|-----------|------|------|
+| PA0 (TIM1_CH1) | J1 底座 | 舵机驱动板 CH1 |
+| PA1 (TIM1_CH2) | J2 大臂 | 舵机驱动板 CH2 |
+| PA2 (TIM1_CH3) | J3 小臂 | 舵机驱动板 CH3 |
+| PA3 (TIM1_CH4) | J4 腕部俯仰 | 舵机驱动板 CH4 |
+| PA0 (TIM2_CH1) | J5 腕部旋转 | 舵机驱动板 CH5 |
+| PA1 (TIM2_CH2) | J6 夹爪 | 舵机驱动板 CH6 |
+| PA10 (USART1_RX) | 视觉数据 | MV4 TX 输出 |
+| GND | 共地 | MV4 GND + 电源GND |
 
-### 可选依赖
-- **深度学习框架**: 用于高级物体检测（如YOLO、SSD等）
-- **ROS/ROS2**: 用于与真实机器人通信
-- **PCL**: 点云处理库
+## 工作原理
 
-## 🚀 快速开始
+1. **MV4 H7 Plus** 俯拍识别物体颜色和像素坐标
+2. 通过 UART 发送数据帧：`0xAA + 颜色ID + X坐标 + Y坐标 + CRC8 + 0x55`
+3. **STM32** 接收帧 → CRC校验 → 九点仿射变换转世界坐标
+4. **4轴几何逆解** → 6个舵机角度
+5. **S曲线插值** → PWM → 舵机动作 → 自动抓取
 
-### 1. 克隆仓库
+## 快速开始
 
-```bash
-git clone https://github.com/your-username/robotic-arm-vision-grasping.git
-cd robotic-arm-vision-grasping
-```
+1. 参考 `docs/stm32-cubemx-config.md` 用 CubeMX 生成工程
+2. 将 `Core/Src/*.c` 和 `Core/Inc/*.h` 加入工程
+3. 参考 `Core/Src/calibration.c` 中的标定指南进行九点标定
+4. 编译烧录 → 上电运行
 
-### 2. 安装依赖
-
-#### Ubuntu/Debian
-```bash
-sudo apt-get update
-sudo apt-get install build-essential cmake
-sudo apt-get install libopencv-dev
-```
-
-#### macOS
-```bash
-brew install cmake
-brew install opencv
-```
-
-#### Windows
-1. 下载并安装 [CMake](https://cmake.org/download/)
-2. 下载并安装 [OpenCV](https://opencv.org/releases/)
-
-### 3. 编译项目
-
-```bash
-mkdir build
-cd build
-cmake ..
-make
-```
-
-或者在Windows上使用Visual Studio：
-```bash
-mkdir build
-cd build
-cmake ..
-# 使用Visual Studio打开生成的解决方案文件
-```
-
-### 4. 运行程序
-
-```bash
-./vision_grasping --help
-```
-
-## 📖 使用方法
-
-### 基本用法
-
-```bash
-# 使用默认设置运行
-./vision_grasping
-
-# 启用调试模式
-./vision_grasping --debug
-
-# 指定相机ID
-./vision_grasping --camera 1
-
-# 执行指定次数的抓取
-./vision_grasping --number 5
-
-# 设置抓取间隔
-./vision_grasping --interval 2000
-```
-
-### 命令行参数
-
-| 参数 | 说明 | 默认值 |
-|------|------|--------|
-| `-h, --help` | 显示帮助信息 | - |
-| `-d, --debug` | 启用调试模式 | false |
-| `-c, --camera ID` | 指定相机ID | 0 |
-| `-n, --number NUM` | 执行NUM次抓取 | 10 |
-| `-i, --interval MS` | 每次抓取间隔毫秒数 | 1000 |
-
-### 示例
-
-#### 调试模式运行
-```bash
-./vision_grasping --debug
-```
-
-#### 使用第二个相机，执行5次抓取
-```bash
-./vision_grasping --camera 1 --number 5
-```
-
-#### 高级调试
-```bash
-./vision_grasping --debug --number 3 --interval 500
-```
-
-## 🏗️ 项目结构
+## 代码结构
 
 ```
-robotic-arm-vision-grasping/
-├── CMakeLists.txt          # CMake构建配置
-├── README.md              # 项目说明文档
-├── .gitignore             # Git忽略文件配置
-├── include/               # 头文件目录
-│   └── vision_grasping.h  # 主要接口定义
-├── src/                   # 源代码目录
-│   ├── main.cpp           # 主程序入口
-│   └── vision_grasping.cpp # 主要实现
-├── examples/              # 示例代码
-│   └── simple_example.cpp # 简单使用示例
-├── docs/                  # 文档目录
-├── data/                  # 数据目录
-└── build/                 # 编译输出目录
+Core/
+├── Src/
+│   ├── main.c                    # 主循环 + 初始化
+│   ├── servo_control.c           # 舵机PWM + S曲线插值
+│   ├── kinematics.c              # 4轴几何逆解
+│   ├── calibration.c             # 九点仿射变换标定
+│   ├── uart_protocol.c           # UART接收 + CRC8校验
+│   └── grasp_state_machine.c     # 抓取状态机
+├── Inc/
+│   ├── servo_control.h
+│   ├── kinematics.h
+│   ├── calibration.h
+│   ├── uart_protocol.h
+│   └── grasp_state_machine.h
+docs/
+├── superpowers/                  # 设计文档和实施计划
+└── stm32-cubemx-config.md        # CubeMX配置指南
 ```
 
-## 🎯 核心模块
+## 核心算法
 
-### 1. 相机模块 (Camera)
-- 处理视频流的捕获
-- 支持多种相机接口
-- 图像预处理功能
+### 1. 九点标定（像素→世界坐标）
 
-### 2. 视觉检测模块 (VisionDetector)
-- 基础物体检测接口
-- 简单Blob检测器实现
-- 易于扩展支持深度学习模型
+在抓取区域摆放3×3共9个点，用最小二乘法求解仿射变换矩阵：
+```
+world_x = a*px + b*py + c
+world_y = d*px + e*py + f
+```
+详见 `Core/Src/calibration.c` 顶部的标定指南。
 
-### 3. 抓取规划模块 (GraspPlanner)
-- 生成抓取候选点
-- 评估抓取质量
-- 支持多种抓取策略
+### 2. 4轴几何逆解
 
-### 4. 机器人控制模块 (RobotController)
-- 标准机器人控制接口
-- 模拟机器人实现
-- 易于适配真实硬件
+- J1（底座）：由目标点方向角决定
+- J2+J3（大臂+小臂）：余弦定理求解二连杆
+- J4（腕部）：保持夹爪水平向下
+- J5/J6：固定姿态
 
-### 5. 集成系统 (VisionGraspingSystem)
-- 整合所有模块
-- 协调抓取流程
-- 调试和可视化支持
+### 3. S曲线插值
 
-## 🔧 自定义和扩展
-
-### 添加新的检测器
-
-```cpp
-#include "vision_grasping.h"
-
-class CustomDetector : public VisionDetector {
-public:
-    CustomDetector() {
-        // 初始化你的检测器
-    }
-
-protected:
-    std::vector<DetectedObject> detect_impl(const cv::Mat& frame) override {
-        // 实现你的检测逻辑
-        std::vector<DetectedObject> objects;
-
-        // 你的检测代码...
-        // 例如：使用YOLO、SSD等深度学习模型
-
-        return objects;
-    }
-};
+三次多项式 S 曲线保证起止速度为零，减少机械冲击：
+```
+s = 3t² - 2t³, t ∈ [0, 1]
 ```
 
-### 连接真实机器人
+## 标定步骤
 
-```cpp
-#include "vision_grasping.h"
+1. 把机械臂末端移动到抓取区域9个位置，记录实际坐标
+2. 用 MV4 读出每个位置的像素坐标
+3. 在 PC 上用 Python/numpy 算出仿射变换矩阵系数
+4. 将系数填入 `Calib_Init` 调用中（在 main.c）
 
-class RealRobot : public RobotController {
-public:
-    RealRobot(const std::string& ip, int port) {
-        // 初始化机器人连接
-        // 例如：连接UR机器人、Franka Emika等
-    }
+## 开发计划
 
-    bool connect() override {
-        // 实现连接逻辑
-        return true;
-    }
+| 阶段 | 内容 |
+|------|------|
+| 第1周 | 硬件搭建、CubeMX工程、单舵机测试 |
+| 第2周 | UART通信、MV4数据接入 |
+| 第3周 | 坐标标定、逆解算法、插值运动 |
+| 第4周 | 全流程联调、参数优化 |
 
-    bool move_to_position(float x, float y, float z) override {
-        // 实现移动逻辑
-        return true;
-    }
+## 许可证
 
-    bool execute_grasp(float width, float force) override {
-        // 实现抓取逻辑
-        return true;
-    }
-
-    bool release_grasp() override {
-        // 实现释放逻辑
-        return true;
-    }
-
-    bool is_connected() const override { return connected_; }
-    bool is_ready() const override { return ready_; }
-};
-```
-
-### 使用自定义组件
-
-```cpp
-int main() {
-    VisionGraspingSystem system;
-
-    // 使用自定义检测器
-    auto custom_detector = std::make_unique<CustomDetector>();
-    system.set_detector(std::move(custom_detector));
-
-    // 使用真实机器人
-    auto real_robot = std::make_unique<RealRobot>("192.168.1.100", 30003);
-    system.set_robot_controller(std::move(real_robot));
-
-    // 启用调试模式
-    system.enable_debug_mode(true);
-
-    // 初始化并运行
-    if (system.initialize()) {
-        system.run_grasping_sequence();
-        system.shutdown();
-    }
-
-    return 0;
-}
-```
-
-## 🎓 学习资源
-
-### 相关项目
-- [GraspNet-1Billion](https://github.com/graspnet/GraspNet-1Billion) - 大规模抓取数据集
-- [AnyGrasp](https://github.com/graspnet/anygrasp) - 通用抓取系统
-- [dex-net](https://github.com/google-research/dex-net) - Google的抓取学习系统
-
-### 技术文档
-- [OpenCV官方文档](https://docs.opencv.org/)
-- [ROS官方教程](https://wiki.ros.org/)
-- [MoveIt运动规划](https://moveit.ros.org/)
-
-### 学术论文
-- "Dex-Net 2.0: Deep Learning to Plan Robust Grasps with Synthetic Point Clouds and Analytic Grasp Metrics"
-- "Grasp Quality CNNs: Learning to Evaluate Grasp Stability from RGB-D Images"
-
-## 🐛 故障排除
-
-### 相机无法打开
-```bash
-# 检查相机设备
-ls /dev/video*  # Linux
-```
-
-### OpenCV找不到
-```bash
-# 设置OpenCV路径
-export OpenCV_DIR=/path/to/opencv/build  # Linux
-```
-
-### 编译错误
-```bash
-# 清理并重新编译
-cd build
-make clean
-cmake ..
-make
-```
-
-## 🤝 贡献指南
-
-欢迎贡献代码！请遵循以下步骤：
-
-1. Fork 本仓库
-2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 开启 Pull Request
-
-## 📄 许可证
-
-本项目采用 MIT 许可证 - 详见 [LICENSE](LICENSE) 文件
-
-## 👥 作者
-
-- **您的名字** - 初始工作
-
-## 🙏 致谢
-
-- OpenCV开发团队
-- ROS开发团队
-- 所有为开源机器人项目做出贡献的开发者
-
-## 📧 联系方式
-
-如有问题或建议，请：
-- 提交 [Issue](https://github.com/your-username/robotic-arm-vision-grasping/issues)
-- 发送邮件至: your.email@example.com
-
----
-
-**注意**: 这是一个模板项目，请根据您的具体需求进行修改和扩展。对于真实环境使用，请确保添加适当的安全措施和错误处理。
+MIT
