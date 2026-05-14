@@ -45,8 +45,8 @@ int Servo_MoveIsDone(void);
 // 强制终止当前插值
 void Servo_MoveStop(void);
 
-// 这个函数必须在主循环中周期性调用（或从TIM中断调用）
-// 每次调用推进一个插值步
+// 这个函数必须在主循环中高频周期性调用
+// 根据 HAL_GetTick() 自动计算进度，step_ms 参数决定实际速度
 void Servo_Tick(void);
 
 #endif

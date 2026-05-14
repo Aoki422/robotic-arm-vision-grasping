@@ -1,6 +1,5 @@
 #include "servo_control.h"
 #include <string.h>
-#include <math.h>
 
 // ====== 硬件映射（根据实际CubeMX TIM配置修改） ======
 // 假设用 TIM1 的 CH1~CH4 + TIM2 的 CH1~CH2 输出6路PWM
@@ -16,7 +15,7 @@ static int g_target[6];
 static int g_start[6];
 static int g_total_steps = 0;
 static int g_step_ms = 0;
-static int g_step_count = 0;
+static uint32_t g_start_tick = 0;
 static int g_moving = 0;
 
 // ====== 辅助：角度 -> CCR 值 ======
@@ -35,6 +34,7 @@ static void Servo_WritePulse(int id, uint32_t pulse) {
         case 3: __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, pulse); break;
         case 4: __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, pulse); break;
         case 5: __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, pulse); break;
+        default: break;
     }
 }
 
@@ -74,11 +74,12 @@ void Servo_GetCurrent(int angles[6]) {
 
 void Servo_MoveStart(int target[6], int total_steps, int step_ms) {
     if (total_steps <= 0) total_steps = 1;
+    if (step_ms <= 0) step_ms = 10;               // 默认每步10ms
     memcpy(g_start, g_current, sizeof(g_start));
     memcpy(g_target, target, sizeof(g_target));
     g_total_steps = total_steps;
     g_step_ms = step_ms;
-    g_step_count = 0;
+    g_start_tick = HAL_GetTick();                  // 记录开始时间
     g_moving = 1;
 }
 
@@ -93,17 +94,25 @@ void Servo_MoveStop(void) {
 void Servo_Tick(void) {
     if (!g_moving) return;
 
-    g_step_count++;
+    // 基于时间的进度计算（使 step_ms 参数有实际意义）
+    uint32_t elapsed = HAL_GetTick() - g_start_tick;
+    uint32_t total_duration = (uint32_t)g_total_steps * (uint32_t)g_step_ms;
 
-    float t = (float)g_step_count / g_total_steps;
-    if (t > 1.0f) t = 1.0f;
+    float t;
+    if (total_duration == 0) {
+        t = 1.0f;
+    } else if (elapsed >= total_duration) {
+        t = 1.0f;
+    } else {
+        t = (float)elapsed / (float)total_duration;
+    }
 
-    // 三次多项式S曲线：f(t) = 3t² - 2t³
+    // 三次多项式S曲线：f(t) = 3t² - 2t³  (起止速度=0)
     float s = 3.0f * t * t - 2.0f * t * t * t;
 
     for (int i = 0; i < SERVO_COUNT; i++) {
         float diff = g_target[i] - g_start[i];
-        int angle = (int)(g_start[i] + diff * s);
+        int angle = (int)(g_start[i] + diff * s + 0.5f);  // 四舍五入
         if (angle < SERVO_MIN_ANGLE) angle = SERVO_MIN_ANGLE;
         if (angle > SERVO_MAX_ANGLE) angle = SERVO_MAX_ANGLE;
         g_current[i] = angle;
