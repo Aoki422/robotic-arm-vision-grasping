@@ -9,16 +9,16 @@
 - HSE → Crystal/Ceramic Resonator
 - Clock Configuration → HCLK = 72MHz（F103最大频率）
 
-## 3. TIM1 配置（舵机PWM J1~J4）
-- 选择 TIM1
+## 3. TIM2 配置（舵机PWM J1~J4）
+- 选择 TIM2
 - Channel1~4 → PWM Generation CH1~CH4
 - 参数设置：
   - Prescaler (PSC) = 71 （72MHz / (71+1) = 1MHz → 1us计数）
   - Counter Period (ARR) = 19999 （1MHz / (19999+1) = 50Hz）
   - Pulse = 1500 （初始90°位置：脉宽1500us）
 
-## 4. TIM2 配置（舵机PWM J5~J6）
-- 选择 TIM2
+## 4. TIM3 配置（舵机PWM J5~J6）
+- 选择 TIM3
 - Channel1~2 → PWM Generation CH1~CH2
 - 参数同上：PSC=71, ARR=19999
 
@@ -65,8 +65,8 @@ int main(void) {
     HAL_Init();
     SystemClock_Config();
     MX_GPIO_Init();
-    MX_TIM1_Init();
-    MX_TIM2_Init();
+    MX_TIM2_Init();    // J1-J4
+    MX_TIM3_Init();    // J5-J6
     MX_USART1_UART_Init();
 
     // ====== 用户初始化 ======
@@ -94,12 +94,12 @@ int main(void) {
 
 | STM32 Pin | 功能 | 连接 |
 |-----------|------|------|
-| PA0 (TIM1_CH1) | J1 底座舵机PWM | 舵机驱动板 CH1 |
-| PA1 (TIM1_CH2) | J2 大臂舵机PWM | 舵机驱动板 CH2 |
-| PA2 (TIM1_CH3) | J3 小臂舵机PWM | 舵机驱动板 CH3 |
-| PA3 (TIM1_CH4) | J4 腕部俯仰PWM | 舵机驱动板 CH4 |
-| PA0 (TIM2_CH1) | J5 腕部旋转PWM | 舵机驱动板 CH5 |
-| PA1 (TIM2_CH2) | J6 夹爪PWM | 舵机驱动板 CH6 |
+| PA0 (TIM2_CH1) | J1 底座 | 舵机驱动板 CH1 |
+| PA1 (TIM2_CH2) | J2 大臂 | 舵机驱动板 CH2 |
+| PA2 (TIM2_CH3) | J3 小臂 | 舵机驱动板 CH3 |
+| PA3 (TIM2_CH4) | J4 腕部俯仰 | 舵机驱动板 CH4 |
+| PA6 (TIM3_CH1) | J5 腕部旋转 | 舵机驱动板 CH5 |
+| PA7 (TIM3_CH2) | J6 夹爪 | 舵机驱动板 CH6 |
 | PA9 (USART1_TX) | 串口发送 | (不用可悬空) |
 | PA10 (USART1_RX) | 串口接收 | MV4 TX 输出 |
 | GND | 共地 | MV4 GND + 电源GND |

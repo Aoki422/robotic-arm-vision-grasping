@@ -12,10 +12,8 @@ void IK_GetHome(int home_angles[6]) {
 }
 
 int IK_Solve(float x, float y, float z, float roll, int angles[6]) {
-    // J1：底座旋转（方向角）
-    float j1_rad = atan2f(y, x);
-    float j1_deg = j1_rad * 180.0f / 3.14159265f;
-    if (j1_deg < 0) j1_deg += 180.0f;
+    // J1：底座旋转（90°=正前方+X，0°=右侧-Y，180°=左侧+Y）
+    float j1_deg = 90.0f - atan2f(y, x) * 180.0f / 3.14159265f;
     angles[0] = (int)(j1_deg + 0.5f);
 
     float R = sqrtf(x * x + y * y);

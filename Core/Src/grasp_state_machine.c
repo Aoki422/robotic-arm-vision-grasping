@@ -3,9 +3,11 @@
 #include "calibration.h"
 #include "servo_control.h"
 #include "uart_protocol.h"
+#include "stm32f1xx_hal.h"
 
 static GraspState g_state = GRASP_IDLE;
 static int g_retry = 0;
+static uint32_t g_wait_until = 0;
 
 // 预计算的关节角度
 static int g_grasp_angles[6];
@@ -33,6 +35,7 @@ const char* Grasp_GetStateName(void) {
 void Grasp_Init(void) {
     g_state = GRASP_IDLE;
     g_retry = 0;
+    g_wait_until = 0;
     Servo_MoveStop();
     IK_GetHome(g_home_angles);
 }
@@ -46,20 +49,15 @@ void Grasp_Tick(void) {
     switch (g_state) {
 
     case GRASP_IDLE:
-        // 使用中断安全接口读取MV4数据
         if (UART_ReadFrame(&color, &px, &py)) {
-            // 坐标转换：像素 → 世界坐标
             Calib_PixelToWorld(px, py, &wx, &wy);
 
-            // 预计算 APPROACH 位置（目标上方安全高度）
             ret = IK_Solve(wx, wy, GRASP_Z + SAFE_Z_OFFSET, 0, g_approach_angles);
-            if (ret != 0) break;  // 不可达
+            if (ret != 0) break;
 
-            // 预计算 GRASP 位置（桌面高度）
             ret = IK_Solve(wx, wy, GRASP_Z, 0, g_grasp_angles);
             if (ret != 0) break;
 
-            // 预计算放置区角度
             IK_Solve(PLACE_X, PLACE_Y, PLACE_Z + SAFE_Z_OFFSET, 0, g_place_approach);
             IK_Solve(PLACE_X, PLACE_Y, PLACE_Z, 0, g_place_angles);
 
@@ -81,13 +79,14 @@ void Grasp_Tick(void) {
 
     case GRASP_CLOSE:
         if (Servo_MoveIsDone()) {
-            Servo_SetAngle(5, 90);      // 闭合夹爪
-            HAL_Delay(300);
+            Servo_SetAngle(5, 90);          // 闭合夹爪
+            g_wait_until = HAL_GetTick() + 300;  // 非阻塞等待300ms
             g_state = GRASP_LIFT;
         }
         break;
 
     case GRASP_LIFT:
+        if (HAL_GetTick() < g_wait_until) break;  // 等待夹爪到位
         Servo_MoveStart(g_approach_angles, 20, 20);
         g_state = GRASP_MOVE_PLACE;
         break;
@@ -101,13 +100,14 @@ void Grasp_Tick(void) {
 
     case GRASP_RELEASE:
         if (Servo_MoveIsDone()) {
-            Servo_SetAngle(5, 0);       // 张开夹爪
-            HAL_Delay(300);
+            Servo_SetAngle(5, 0);           // 张开夹爪
+            g_wait_until = HAL_GetTick() + 300;
             g_state = GRASP_RETURN_HOME;
         }
         break;
 
     case GRASP_RETURN_HOME:
+        if (HAL_GetTick() < g_wait_until) break;
         Servo_MoveStart(g_home_angles, 30, 20);
         g_state = GRASP_DONE;
         break;

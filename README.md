@@ -17,12 +17,12 @@
 
 | STM32 Pin | 功能 | 连接 |
 |-----------|------|------|
-| PA0 (TIM1_CH1) | J1 底座 | 舵机驱动板 CH1 |
-| PA1 (TIM1_CH2) | J2 大臂 | 舵机驱动板 CH2 |
-| PA2 (TIM1_CH3) | J3 小臂 | 舵机驱动板 CH3 |
-| PA3 (TIM1_CH4) | J4 腕部俯仰 | 舵机驱动板 CH4 |
-| PA0 (TIM2_CH1) | J5 腕部旋转 | 舵机驱动板 CH5 |
-| PA1 (TIM2_CH2) | J6 夹爪 | 舵机驱动板 CH6 |
+| PA0 (TIM2_CH1) | J1 底座 | 舵机驱动板 CH1 |
+| PA1 (TIM2_CH2) | J2 大臂 | 舵机驱动板 CH2 |
+| PA2 (TIM2_CH3) | J3 小臂 | 舵机驱动板 CH3 |
+| PA3 (TIM2_CH4) | J4 腕部俯仰 | 舵机驱动板 CH4 |
+| PA6 (TIM3_CH1) | J5 腕部旋转 | 舵机驱动板 CH5 |
+| PA7 (TIM3_CH2) | J6 夹爪 | 舵机驱动板 CH6 |
 | PA10 (USART1_RX) | 视觉数据 | MV4 TX 输出 |
 | GND | 共地 | MV4 GND + 电源GND |
 

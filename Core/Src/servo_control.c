@@ -1,13 +1,14 @@
 #include "servo_control.h"
 #include <string.h>
 
-// ====== 硬件映射（根据实际CubeMX TIM配置修改） ======
-// 假设用 TIM1 的 CH1~CH4 + TIM2 的 CH1~CH2 输出6路PWM
-// 用户在 CubeMX 中应配好 TIM 为 50Hz (PSC=71, ARR=19999 @72MHz)
+// ====== 硬件映射 ======
+// TIM2 CH1-4: J1-J4  (PA0-PA3)
+// TIM3 CH1-2: J5-J6  (PA6-PA7)
+// 用户在 CubeMX 中应配好 TIM2/TIM3 为 50Hz (PSC=71, ARR=19999 @72MHz)
 // TIM_HandleTypeDef 全局变量由 CubeMX 生成，需要 extern
 
-extern TIM_HandleTypeDef htim1;
 extern TIM_HandleTypeDef htim2;
+extern TIM_HandleTypeDef htim3;
 
 // ====== 内部状态 ======
 static int g_current[6] = {90, 90, 90, 90, 0, 0};
@@ -28,12 +29,12 @@ static uint32_t AngleToPulse(int angle) {
 // ====== 硬件写PWM ======
 static void Servo_WritePulse(int id, uint32_t pulse) {
     switch (id) {
-        case 0: __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, pulse); break;
-        case 1: __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_2, pulse); break;
-        case 2: __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_3, pulse); break;
-        case 3: __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_4, pulse); break;
-        case 4: __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, pulse); break;
-        case 5: __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, pulse); break;
+        case 0: __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, pulse); break;
+        case 1: __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, pulse); break;
+        case 2: __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_3, pulse); break;
+        case 3: __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_4, pulse); break;
+        case 4: __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, pulse); break;
+        case 5: __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, pulse); break;
         default: break;
     }
 }
@@ -41,12 +42,12 @@ static void Servo_WritePulse(int id, uint32_t pulse) {
 // ====== 公共接口 ======
 
 void Servo_Init(void) {
-    HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
-    HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_2);
-    HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
-    HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4);
     HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
     HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
+    HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_3);
+    HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_4);
+    HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
+    HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2);
 
     int init_angles[6] = {90, 90, 90, 90, 0, 0};
     Servo_SetAll(init_angles);
@@ -94,7 +95,6 @@ void Servo_MoveStop(void) {
 void Servo_Tick(void) {
     if (!g_moving) return;
 
-    // 基于时间的进度计算（使 step_ms 参数有实际意义）
     uint32_t elapsed = HAL_GetTick() - g_start_tick;
     uint32_t total_duration = (uint32_t)g_total_steps * (uint32_t)g_step_ms;
 
@@ -112,7 +112,7 @@ void Servo_Tick(void) {
 
     for (int i = 0; i < SERVO_COUNT; i++) {
         float diff = g_target[i] - g_start[i];
-        int angle = (int)(g_start[i] + diff * s + 0.5f);  // 四舍五入
+        int angle = (int)(g_start[i] + diff * s + 0.5f);
         if (angle < SERVO_MIN_ANGLE) angle = SERVO_MIN_ANGLE;
         if (angle > SERVO_MAX_ANGLE) angle = SERVO_MAX_ANGLE;
         g_current[i] = angle;
