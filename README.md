@@ -313,7 +313,7 @@ make
 
 ## 👥 作者
 
-- **您的名字** - 初始工作
+- **ClaudeLee** - 初始工作
 
 ## 🙏 致谢
 
@@ -324,8 +324,8 @@ make
 ## 📧 联系方式
 
 如有问题或建议，请：
-- 提交 [Issue](https://github.com/your-username/robotic-arm-vision-grasping/issues)
-- 发送邮件至: your.email@example.com
+- 提交 [Issue](https://github.com/Aoki422/robotic-arm-vision-grasping/issues)
+- 发送邮件至: claudelee49@gmail.com
 
 ---
 
