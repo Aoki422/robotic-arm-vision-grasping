@@ -1,4 +1,5 @@
 #include "uart_protocol.h"
+#include "platform_hal.h"
 
 // ====== 内部接收状态（static 隐藏实现细节） ======
 static volatile uint8_t  g_mv4_color    = 0;

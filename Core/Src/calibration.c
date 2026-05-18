@@ -57,6 +57,9 @@
 
 #include "calibration.h"
 
+#include <math.h>
+#include <string.h>
+
 static AffineMatrix g_matrix;
 
 void Calib_Init(const AffineMatrix* matrix) {
@@ -77,5 +80,177 @@ void Calib_PixelToWorld(int px, int py, float* wx, float* wy) {
 void Calib_SetMatrix(const AffineMatrix* matrix) {
     if (matrix) {
         g_matrix = *matrix;
+    }
+}
+
+static int solve_3x3(float a[3][3], float b[3], float out[3]) {
+    float m[3][4];
+    int row;
+    int col;
+
+    for (row = 0; row < 3; row++) {
+        for (col = 0; col < 3; col++) {
+            m[row][col] = a[row][col];
+        }
+        m[row][3] = b[row];
+    }
+
+    for (col = 0; col < 3; col++) {
+        int pivot = col;
+        float max_abs = fabsf(m[col][col]);
+        for (row = col + 1; row < 3; row++) {
+            float v = fabsf(m[row][col]);
+            if (v > max_abs) {
+                max_abs = v;
+                pivot = row;
+            }
+        }
+
+        if (max_abs < 1.0e-6f) {
+            return -1;
+        }
+
+        if (pivot != col) {
+            for (int k = col; k < 4; k++) {
+                float tmp = m[col][k];
+                m[col][k] = m[pivot][k];
+                m[pivot][k] = tmp;
+            }
+        }
+
+        {
+            float div = m[col][col];
+            for (int k = col; k < 4; k++) {
+                m[col][k] /= div;
+            }
+        }
+
+        for (row = 0; row < 3; row++) {
+            if (row == col) continue;
+            {
+                float factor = m[row][col];
+                for (int k = col; k < 4; k++) {
+                    m[row][k] -= factor * m[col][k];
+                }
+            }
+        }
+    }
+
+    out[0] = m[0][3];
+    out[1] = m[1][3];
+    out[2] = m[2][3];
+    return 0;
+}
+
+int Calib_SolveAffine(const CalibPoint* points, uint8_t count, AffineMatrix* out_matrix) {
+    float ata[3][3];
+    float atx[3];
+    float aty[3];
+    float sol_x[3];
+    float sol_y[3];
+
+    if (points == 0 || out_matrix == 0 || count < 3u) {
+        return -1;
+    }
+
+    memset(ata, 0, sizeof(ata));
+    memset(atx, 0, sizeof(atx));
+    memset(aty, 0, sizeof(aty));
+
+    for (uint8_t i = 0; i < count; i++) {
+        float row[3];
+        row[0] = (float)points[i].px;
+        row[1] = (float)points[i].py;
+        row[2] = 1.0f;
+
+        for (int r = 0; r < 3; r++) {
+            for (int c = 0; c < 3; c++) {
+                ata[r][c] += row[r] * row[c];
+            }
+            atx[r] += row[r] * points[i].wx;
+            aty[r] += row[r] * points[i].wy;
+        }
+    }
+
+    if (solve_3x3(ata, atx, sol_x) != 0) {
+        return -1;
+    }
+
+    /*
+     * solve_3x3 会原地消元，所以 Y 方向需要重新构造一次 ATA。
+     */
+    memset(ata, 0, sizeof(ata));
+    for (uint8_t i = 0; i < count; i++) {
+        float row[3];
+        row[0] = (float)points[i].px;
+        row[1] = (float)points[i].py;
+        row[2] = 1.0f;
+        for (int r = 0; r < 3; r++) {
+            for (int c = 0; c < 3; c++) {
+                ata[r][c] += row[r] * row[c];
+            }
+        }
+    }
+
+    if (solve_3x3(ata, aty, sol_y) != 0) {
+        return -1;
+    }
+
+    out_matrix->a = sol_x[0];
+    out_matrix->b = sol_x[1];
+    out_matrix->c = sol_x[2];
+    out_matrix->d = sol_y[0];
+    out_matrix->e = sol_y[1];
+    out_matrix->f = sol_y[2];
+    return 0;
+}
+
+float Calib_ComputeMaxError(const CalibPoint* points, uint8_t count, const AffineMatrix* matrix) {
+    float max_error = 0.0f;
+
+    if (points == 0 || matrix == 0) {
+        return -1.0f;
+    }
+
+    for (uint8_t i = 0; i < count; i++) {
+        float wx = matrix->a * (float)points[i].px + matrix->b * (float)points[i].py + matrix->c;
+        float wy = matrix->d * (float)points[i].px + matrix->e * (float)points[i].py + matrix->f;
+        float dx = wx - points[i].wx;
+        float dy = wy - points[i].wy;
+        float err = sqrtf(dx * dx + dy * dy);
+        if (err > max_error) {
+            max_error = err;
+        }
+    }
+
+    return max_error;
+}
+
+void Calib_GenerateSimulatedPoints(const AffineMatrix* truth, CalibPoint points[CALIB_SIM_POINT_COUNT]) {
+    static const int pixels[CALIB_SIM_POINT_COUNT][2] = {
+        {160, 140}, {320, 140}, {480, 140},
+        {160, 260}, {320, 260}, {480, 260},
+        {160, 380}, {320, 380}, {480, 380}
+    };
+    AffineMatrix default_truth;
+    const AffineMatrix* m = truth;
+
+    if (points == 0) return;
+
+    if (m == 0) {
+        default_truth.a = 0.50f;
+        default_truth.b = 0.00f;
+        default_truth.c = -80.0f;
+        default_truth.d = 0.00f;
+        default_truth.e = 0.50f;
+        default_truth.f = -130.0f;
+        m = &default_truth;
+    }
+
+    for (uint8_t i = 0; i < CALIB_SIM_POINT_COUNT; i++) {
+        points[i].px = pixels[i][0];
+        points[i].py = pixels[i][1];
+        points[i].wx = m->a * (float)points[i].px + m->b * (float)points[i].py + m->c;
+        points[i].wy = m->d * (float)points[i].px + m->e * (float)points[i].py + m->f;
     }
 }

@@ -21,7 +21,7 @@
 #define GRIPPER_OPEN    0
 #define GRIPPER_CLOSE   90
 
-// 初始化PWM（需在CubeMX配好TIM后调用）
+// 初始化PWM；PC_SIM下写入模拟PWM，实机适配时由平台HAL映射到真实PWM
 void Servo_Init(void);
 
 // 立即设置单个舵机角度（0-180）
@@ -37,7 +37,7 @@ void Servo_GetCurrent(int angles[6]);
 
 // 启动一次插值移动（不会阻塞）
 // target: 目标角度数组，total_steps: 总步数，step_ms: 每步间隔ms
-void Servo_MoveStart(int target[6], int total_steps, int step_ms);
+void Servo_MoveStart(const int target[6], int total_steps, int step_ms);
 
 // 查询插值是否完成，返回1=完成，0=进行中
 int Servo_MoveIsDone(void);

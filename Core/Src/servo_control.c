@@ -1,11 +1,12 @@
 #include "servo_control.h"
+#include "platform_hal.h"
+#include "sim_config.h"
 #include <string.h>
 
 // ====== 硬件映射 ======
 // TIM2 CH1-4: J1-J4  (PA0-PA3)
 // TIM3 CH1-2: J5-J6  (PA6-PA7)
-// 用户在 CubeMX 中应配好 TIM2/TIM3 为 50Hz (PSC=71, ARR=19999 @72MHz)
-// TIM_HandleTypeDef 全局变量由 CubeMX 生成，需要 extern
+// PC_SIM 下 htim2/htim3 来自 platform_hal_pc.c；实机适配时来自平台HAL工程。
 
 extern TIM_HandleTypeDef htim2;
 extern TIM_HandleTypeDef htim3;
@@ -21,9 +22,13 @@ static int g_moving = 0;
 
 // ====== 辅助：角度 -> CCR 值 ======
 static uint32_t AngleToPulse(int angle) {
+    const SimConfig* cfg = SimConfig_Get();
+    int min_pulse = cfg->servo_min_pulse_us;
+    int max_pulse = cfg->servo_max_pulse_us;
+
     if (angle < SERVO_MIN_ANGLE) angle = SERVO_MIN_ANGLE;
     if (angle > SERVO_MAX_ANGLE) angle = SERVO_MAX_ANGLE;
-    return SERVO_MIN_PULSE + (uint32_t)((float)(SERVO_MAX_PULSE - SERVO_MIN_PULSE) * angle / 180.0f);
+    return (uint32_t)(min_pulse + (int)((float)(max_pulse - min_pulse) * angle / 180.0f));
 }
 
 // ====== 硬件写PWM ======
@@ -73,7 +78,7 @@ void Servo_GetCurrent(int angles[6]) {
 
 // ====== 非阻塞S曲线插值 ======
 
-void Servo_MoveStart(int target[6], int total_steps, int step_ms) {
+void Servo_MoveStart(const int target[6], int total_steps, int step_ms) {
     if (total_steps <= 0) total_steps = 1;
     if (step_ms <= 0) step_ms = 10;               // 默认每步10ms
     memcpy(g_start, g_current, sizeof(g_start));

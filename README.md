@@ -1,109 +1,91 @@
-# 机械臂视觉抓取系统 — STM32实战版
+# 机械臂视觉抓取系统 - 纯PC/仿真闭环版
 
-基于中国大学生工程实践与创新能力大赛（工训大赛）标准，使用 MV4 H7 Plus 视觉模块 + STM32 + ZX30D 六轴舵机臂的低成本桌面抓取方案。
+本项目用于在**无真实硬件、无实物机械臂、无真实传感器、无外部硬件链路**的条件下验证机械臂视觉抓取核心逻辑。
 
-## 硬件清单
+当前主流程只依赖 PC 构建、单元测试和 CoppeliaSim 可视化仿真。STM32 相关代码通过 `platform_hal.h` 做接口隔离：PC 模式使用模拟 HAL 桩函数，未来实机适配时再切换到 CubeMX HAL。
 
-| 硬件 | 型号 | 状态 |
-|------|------|------|
-| 六轴机械臂 | ZX30D 舵机 × 6 | 已有 |
-| 主控板 | STM32 (F1/F4) | 已有 |
-| 视觉模块 | MV4 H7 Plus | 已有 |
-| 电源 | 12V/10A 开关电源 | 需购 |
-| 舵机驱动板 | PCA9685 或 servo shield | 需购 |
-| 夹爪 | 舵机控制夹爪 | 需购 |
+## 当前能力
 
-## 接线图
+- PC 端可编译核心 C 逻辑，不依赖真实 STM32 HAL。
+- 自动化测试覆盖 UART 帧解析、CRC 校验、9点仿射标定、IK 可达/不可达边界和抓取状态机最小闭环。
+- 状态机支持多帧确认、目标丢失超时、运动超时、不可达保护、放置区 IK 检查、失败回 Home。
+- 运动学支持 ARM_L4 末端偏移、舵机零位/方向映射、关节软限位、正逆运动学回算验证。
+- CoppeliaSim 脚本提供两种模式：纯 PC 逻辑仿真、UR5+RG2 可视化仿真。
+- 仿真指标包含工作区范围、定位误差阈值、抓取成功率统计。
 
-| STM32 Pin | 功能 | 连接 |
-|-----------|------|------|
-| PA0 (TIM2_CH1) | J1 底座 | 舵机驱动板 CH1 |
-| PA1 (TIM2_CH2) | J2 大臂 | 舵机驱动板 CH2 |
-| PA2 (TIM2_CH3) | J3 小臂 | 舵机驱动板 CH3 |
-| PA3 (TIM2_CH4) | J4 腕部俯仰 | 舵机驱动板 CH4 |
-| PA6 (TIM3_CH1) | J5 腕部旋转 | 舵机驱动板 CH5 |
-| PA7 (TIM3_CH2) | J6 夹爪 | 舵机驱动板 CH6 |
-| PA10 (USART1_RX) | 视觉数据 | MV4 TX 输出 |
-| GND | 共地 | MV4 GND + 电源GND |
+## 目录结构
 
-## 工作原理
-
-1. **MV4 H7 Plus** 俯拍识别物体颜色和像素坐标
-2. 通过 UART 发送数据帧：`0xAA + 颜色ID + X坐标 + Y坐标 + CRC8 + 0x55`
-3. **STM32** 接收帧 → CRC校验 → 九点仿射变换转世界坐标
-4. **4轴几何逆解** → 6个舵机角度
-5. **S曲线插值** → PWM → 舵机动作 → 自动抓取
-
-## 快速开始
-
-1. 参考 `docs/stm32-cubemx-config.md` 用 CubeMX 生成工程
-2. 将 `Core/Src/*.c` 和 `Core/Inc/*.h` 加入工程
-3. 参考 `Core/Src/calibration.c` 中的标定指南进行九点标定
-4. 编译烧录 → 上电运行
-
-## 代码结构
-
-```
+```text
 Core/
-├── Src/
-│   ├── main.c                    # 主循环 + 初始化
-│   ├── servo_control.c           # 舵机PWM + S曲线插值
-│   ├── kinematics.c              # 4轴几何逆解
-│   ├── calibration.c             # 九点仿射变换标定
-│   ├── uart_protocol.c           # UART接收 + CRC8校验
-│   └── grasp_state_machine.c     # 抓取状态机
-├── Inc/
-│   ├── servo_control.h
-│   ├── kinematics.h
-│   ├── calibration.h
-│   ├── uart_protocol.h
-│   └── grasp_state_machine.h
+  Inc/                       # 核心模块头文件、PC HAL隔离、仿真配置/指标接口
+  Src/                       # 核心逻辑实现
+coppeliasim/
+  visual_grasping.py         # pc / coppeliasim 两种仿真入口
+config/
+  sim_params.ini             # 仿真参数配置，不需要修改核心代码
+tests/
+  test_core.c                # PC端核心逻辑单元测试
+  run_tests.py               # 一键测试脚本
 docs/
-├── superpowers/                  # 设计文档和实施计划
-└── stm32-cubemx-config.md        # CubeMX配置指南
+  pc-simulation-guide.md     # 无实机运行指南
 ```
 
-## 核心算法
+## 一键运行
 
-### 1. 九点标定（像素→世界坐标）
+### 1. PC 端单元测试
 
-在抓取区域摆放3×3共9个点，用最小二乘法求解仿射变换矩阵：
-```
-world_x = a*px + b*py + c
-world_y = d*px + e*py + f
-```
-详见 `Core/Src/calibration.c` 顶部的标定指南。
+安装任意一种 C 编译工具链后运行：
 
-### 2. 4轴几何逆解
-
-- J1（底座）：由目标点方向角决定
-- J2+J3（大臂+小臂）：余弦定理求解二连杆
-- J4（腕部）：保持夹爪水平向下
-- J5/J6：固定姿态
-
-### 3. S曲线插值
-
-三次多项式 S 曲线保证起止速度为零，减少机械冲击：
-```
-s = 3t² - 2t³, t ∈ [0, 1]
+```bash
+python tests/run_tests.py
 ```
 
-## 标定步骤
+脚本优先使用 CMake；没有 CMake 时会尝试 `gcc`、`clang` 或 `cl`。
 
-1. 把机械臂末端移动到抓取区域9个位置，记录实际坐标
-2. 用 MV4 读出每个位置的像素坐标
-3. 在 PC 上用 Python/numpy 算出仿射变换矩阵系数
-4. 将系数填入 `Calib_Init` 调用中（在 main.c）
+### 2. 纯 PC 逻辑仿真
 
-## 开发计划
+```bash
+python coppeliasim/visual_grasping.py --mode pc --attempts 20
+```
 
-| 阶段 | 内容 |
-|------|------|
-| 第1周 | 硬件搭建、CubeMX工程、单舵机测试 |
-| 第2周 | UART通信、MV4数据接入 |
-| 第3周 | 坐标标定、逆解算法、插值运动 |
-| 第4周 | 全流程联调、参数优化 |
+该模式不需要打开 CoppeliaSim，也不需要任何外设。
 
-## 许可证
+### 3. CoppeliaSim 可视化仿真
 
-MIT
+先打开 CoppeliaSim，加载包含 `/UR5_target`、`/UR5_tip`、`/UR5_joint1..6`、`/VisionSensor`、RG2 的示例场景，然后运行：
+
+```bash
+python coppeliasim/visual_grasping.py --mode coppeliasim
+```
+
+注意：该模式只验证 UR5+RG2 的视觉抓取概念，不代表真实 ZX30D 舵机臂实机验证。
+
+## 参数修改
+
+修改 [config/sim_params.ini](config/sim_params.ini) 即可调整：
+
+- 连杆长度：`arm_l1_mm` ~ `arm_l4_mm`
+- 工作区：默认 200mm x 150mm
+- 定位精度阈值：默认 `positioning_tolerance_mm = 5`
+- 目标多帧确认：`target_confirm_frames`
+- 舵机零位/方向/软限位：`joint_zero_deg`、`joint_direction`、`joint_soft_min_deg`、`joint_soft_max_deg`
+
+## 构建说明
+
+CMake 构建：
+
+```bash
+cmake -S . -B build -DPC_SIM=ON
+cmake --build build
+ctest --test-dir build --output-on-failure
+```
+
+Makefile 构建：
+
+```bash
+make test
+```
+
+## 原则
+
+本仓库当前不要求真实硬件、实物标定或烧录才能运行。所有硬件相关逻辑均通过 `platform_hal.h` 和 PC 模拟桩隔离。

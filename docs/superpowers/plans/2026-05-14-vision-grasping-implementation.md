@@ -1,5 +1,8 @@
 # 机械臂视觉抓取系统 实施计划
 
+> 历史存档说明：本文是早期实机方向实施草案，不是当前项目的运行前提。
+> 当前主线已切换为无真实硬件的 PC/仿真闭环，运行方式以 `README.md` 和 `docs/pc-simulation-guide.md` 为准。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 在 STM32 上实现 MV4 H7 Plus 视觉识别 + 六轴舵机臂桌面自动抓取
